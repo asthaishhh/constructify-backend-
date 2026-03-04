@@ -1,10 +1,20 @@
 import express from "express";
-import Material from "../models/Material.js";
+import Material from "../middleware/models/Material.js";
+import  authenticateToken  from "../middleware/auth.js";
+import authorizeRoles  from "../middleware/authorize.js";
 
 const router = express.Router();
 
-// GET all materials
-router.get("/", async (req, res) => {
+/* -------------------------
+   🔐 Require Login
+--------------------------*/
+router.use(authenticateToken);
+
+
+/* -------------------------
+   ✅ GET all materials
+--------------------------*/
+router.get("/", authorizeRoles("admin", "user"), async (req, res) => {
   try {
     const materials = await Material.find();
     res.json(materials);
@@ -13,10 +23,13 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST new material
-router.post("/", async (req, res) => {
-  const newMaterial = new Material(req.body);
+
+/* -------------------------
+   ✅ POST new material
+--------------------------*/
+router.post("/", authorizeRoles("admin", "user"), async (req, res) => {
   try {
+    const newMaterial = new Material(req.body);
     const saved = await newMaterial.save();
     res.status(201).json(saved);
   } catch (err) {
@@ -24,20 +37,40 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT update material
-router.put("/:id", async (req, res) => {
+
+/* -------------------------
+   ✅ PUT update material
+--------------------------*/
+router.put("/:id", authorizeRoles("admin", "user"), async (req, res) => {
   try {
-    const updated = await Material.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updated = await Material.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Material not found" });
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// DELETE material
-router.delete("/:id", async (req, res) => {
+
+/* -------------------------
+   ✅ DELETE material
+--------------------------*/
+router.delete("/:id", authorizeRoles("admin", "user"), async (req, res) => {
   try {
-    await Material.findByIdAndDelete(req.params.id);
+    const deleted = await Material.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Material not found" });
+    }
+
     res.json({ message: "Material deleted" });
   } catch (err) {
     res.status(400).json({ message: err.message });

@@ -1,10 +1,21 @@
 import express from "express";
-import Employee from "../models/Employee.js";
+import Employee from "../middleware/models/Employee.js";
+import  authenticateToken  from "../middleware/auth.js";
+import authorizeRoles from "../middleware/authorize.js";
 
 const router = express.Router();
 
-// GET all employees
-router.get("/", async (req, res) => {
+/* -------------------------
+   🔐 Require Authentication
+--------------------------*/
+router.use(authenticateToken);
+
+
+/* -------------------------
+   ✅ GET all employees
+   Admin + User
+--------------------------*/
+router.get("/", authorizeRoles("admin", "user"), async (req, res) => {
   try {
     const employees = await Employee.find();
     res.json(employees);
@@ -13,8 +24,12 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST add new employee
-router.post("/", async (req, res) => {
+
+/* -------------------------
+   ❌ POST add employee
+   Admin ONLY
+--------------------------*/
+router.post("/", authorizeRoles("admin"), async (req, res) => {
   try {
     const employee = new Employee(req.body);
     const savedEmployee = await employee.save();
@@ -24,20 +39,42 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT update employee
-router.put("/:id", async (req, res) => {
+
+/* -------------------------
+   ❌ PUT update employee
+   Admin ONLY
+--------------------------*/
+router.put("/:id", authorizeRoles("admin"), async (req, res) => {
   try {
-    const updatedEmployee = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updatedEmployee = await Employee.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    if (!updatedEmployee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
     res.json(updatedEmployee);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// DELETE employee
-router.delete("/:id", async (req, res) => {
+
+/* -------------------------
+   ❌ DELETE employee
+   Admin ONLY
+--------------------------*/
+router.delete("/:id", authorizeRoles("admin"), async (req, res) => {
   try {
-    await Employee.findByIdAndDelete(req.params.id);
+    const deletedEmployee = await Employee.findByIdAndDelete(req.params.id);
+
+    if (!deletedEmployee) {
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
     res.json({ message: "Employee deleted" });
   } catch (err) {
     res.status(500).json({ message: err.message });

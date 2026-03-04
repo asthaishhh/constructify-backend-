@@ -6,7 +6,7 @@ const materialSchema = new mongoose.Schema({
   unit: { type: String, required: true },
   category: { type: String, required: true },
   minStock: { type: Number, default: 0 },
-  lastUpdated: { type: String, required: true },
+  
 }, { timestamps: true });
 
 const Material = mongoose.model("Material", materialSchema);

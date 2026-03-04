@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-
-export const authenticateToken = async (req, res, next) => {
+import User from './models/User.js';
+const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -28,3 +27,4 @@ export const authenticateToken = async (req, res, next) => {
 };
 
 
+export default authenticateToken;

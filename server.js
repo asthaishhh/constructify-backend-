@@ -213,15 +213,18 @@ import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
 import chartRoutes from "./routes/chartRoutes.js";
-import Material from "./models/Material.js";
 import materialsRouter from "./routes/materials.js";
-import dashboardOrdersRoutes from "./routes/dashboardOrders.js";
-import OrderManagement from "./models/OrderManagement.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
+import dashboardOrdersRoutes from "./routes/dashboardOrders.js";
 import transportationRoutes from "./routes/transportation.js";
 import authRoutes from "./routes/auth.js";
 import emailRoutes from "./routes/email.js";
 import invoicesRouter from "./routes/invoices.js";
+import Material from "./middleware/models/Material.js";
+import OrderManagement from "./middleware/models/OrderManagement.js";
+import customerRoutes from "./routes/customerRoutes.js";
+
+
 
 // Load environment variables
 dotenv.config();
@@ -239,6 +242,7 @@ app.use("/api/transportation", transportationRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/email", emailRoutes);
 app.use("/api/invoices", invoicesRouter);
+app.use("/api/customers", customerRoutes);
 
 // Connect MongoDB
 mongoose
@@ -255,10 +259,11 @@ const orderSchema = new mongoose.Schema({
   status: String,
   date: String,
 });
-const Order = mongoose.model("Customer", orderSchema);
+const Order = mongoose.model("Order", orderSchema);
 
 
 app.get("/", (req, res) => res.send("API is running"));
+
 
 // API route
 app.get("/api/orders", async (req, res) => {

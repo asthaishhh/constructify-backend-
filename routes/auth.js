@@ -1,7 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import { authenticateToken } from '../middleware/auth.js';
+import User from '../middleware/models/User.js';
+import  authenticateToken  from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -61,6 +61,7 @@ router.post('/signup', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -115,6 +116,7 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -133,6 +135,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         id: req.user._id,
         name: req.user.name,
         email: req.user.email,
+        role: req.user.role,
         createdAt: req.user.createdAt,
       },
     });

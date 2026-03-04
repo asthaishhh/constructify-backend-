@@ -1,7 +1,7 @@
 // backend/routes/transportation.js
 import express from "express";
-import Driver from "../models/Driver.js";
-import Vehicle from "../models/Vehicle.js";
+import Driver from "../middleware/models/Driver.js";
+import Vehicle from "../middleware/models/Vehicle.js";
 
 const router = express.Router();
 

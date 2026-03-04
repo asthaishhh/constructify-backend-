@@ -38,14 +38,6 @@ const orderManagementSchema = new mongoose.Schema(
       enum: ["open", "executed", "completed", "cancelled"],
       default: "open",
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
   },
   { timestamps: true }
 );

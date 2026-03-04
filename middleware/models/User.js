@@ -7,18 +7,30 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Name is required'],
     trim: true,
   },
+
   email: {
     type: String,
     required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
     trim: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email'],
+    match: [
+      /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
+      'Please enter a valid email'
+    ],
   },
+
   password: {
     type: String,
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters long'],
+  },
+
+  // ✅ ADD THIS FIELD
+  role: {
+    type: String,
+    enum: ['admin', 'user'],
+    default: 'user',
   },
 
   createdAt: {
@@ -26,6 +38,7 @@ const userSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
 
 // Hash password before saving
 userSchema.pre('save', async function (next) {
@@ -40,10 +53,12 @@ userSchema.pre('save', async function (next) {
   }
 });
 
+
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
 
 // Remove password from JSON output
 userSchema.methods.toJSON = function () {
