@@ -1,6 +1,5 @@
-import mongoose from "mongoose";
-
-const DriverSchema = new mongoose.Schema({
+const DriverSchema = new mongoose.Schema(
+{
   name: { type: String, required: true },
   licenseNo: { type: String, required: true, unique: true },
   experience: { type: Number, default: 0 },
@@ -10,10 +9,8 @@ const DriverSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ["Active", "On Route", "Inactive"],
-    default: "Active",
-  },
-});
-
-const Driver = mongoose.model("Driver", DriverSchema);
-
-export default Driver;
+    default: "Active"
+  }
+},
+{ timestamps: true }
+);

@@ -1,6 +1,6 @@
 import express from "express";
-import Employee from "../middleware/models/Employee.js";
-import  authenticateToken  from "../middleware/auth.js";
+import Employee from "../models/Employee.js";
+import authenticateToken from "../middleware/auth.js";
 import authorizeRoles from "../middleware/authorize.js";
 
 const router = express.Router();
@@ -10,20 +10,18 @@ const router = express.Router();
 --------------------------*/
 router.use(authenticateToken);
 
-
 /* -------------------------
    ✅ GET all employees
    Admin + User
 --------------------------*/
 router.get("/", authorizeRoles("admin", "user"), async (req, res) => {
   try {
-    const employees = await Employee.find();
+    const employees = await Employee.find().sort({ createdAt: -1 });
     res.json(employees);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
-
 
 /* -------------------------
    ❌ POST add employee
@@ -31,14 +29,12 @@ router.get("/", authorizeRoles("admin", "user"), async (req, res) => {
 --------------------------*/
 router.post("/", authorizeRoles("admin"), async (req, res) => {
   try {
-    const employee = new Employee(req.body);
-    const savedEmployee = await employee.save();
+    const savedEmployee = await Employee.create(req.body);
     res.status(201).json(savedEmployee);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
-
 
 /* -------------------------
    ❌ PUT update employee
@@ -61,7 +57,6 @@ router.put("/:id", authorizeRoles("admin"), async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 });
-
 
 /* -------------------------
    ❌ DELETE employee
