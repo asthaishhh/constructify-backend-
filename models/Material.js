@@ -5,7 +5,8 @@ const materialSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    unique: true
+    unique: true,
+    enum: ["sand", "cement", "iron rods", "bricks"]
   },
 
   quantity: {

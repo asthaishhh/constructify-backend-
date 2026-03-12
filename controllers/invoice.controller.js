@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import Invoice from "../models/Invoice.js";
 import Material from "../models/Material.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import puppeteer from "puppeteer";
 
 // Helper to detect whether MongoDB server supports transactions
 const serverSupportsTransactions = async () => {
@@ -223,4 +227,117 @@ export const deleteInvoice = async (req, res) => {
   } finally {
     if (session) session.endSession();
   }
+};
+
+// GET /api/invoices/:id/pdf
+export const generateInvoicePdf = async (req, res) => {
+  try {
+    const invoiceId = req.params.id;
+    const { pdfBuffer, invoice } = await generateInvoicePdfBuffer(invoiceId);
+    if (!pdfBuffer) return res.status(500).json({ message: 'Failed to generate PDF' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="invoice_${invoice.invoiceNumber || invoice._id}.pdf"`);
+    return res.send(pdfBuffer);
+  } catch (err) {
+    console.error('generateInvoicePdf error:', err);
+    return res.status(500).json({ message: 'Failed to generate PDF', error: err.message });
+  }
+};
+
+export const generateInvoicePdfBuffer = async (invoiceId) => {
+  // returns { pdfBuffer: Buffer, invoice }
+  const invoice = await Invoice.findById(invoiceId).populate("customer").populate("materials.material");
+  if (!invoice) return { pdfBuffer: null, invoice: null };
+
+  // Resolve template path relative to this file to avoid relying on process.cwd()
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const tplPath = path.resolve(__dirname, "..", "templates", "invoice-template.html");
+  let tpl = fs.readFileSync(tplPath, "utf8");
+
+  const clientName = invoice.client || (invoice.customer && invoice.customer.name) || "";
+  const clientAddress = invoice.clientAddress || (invoice.customer && invoice.customer.address) || "";
+  const clientEmail = invoice.clientEmail || (invoice.customer && invoice.customer.email) || "";
+  const clientPhone = invoice.clientPhone || (invoice.customer && invoice.customer.phone) || "";
+
+  const itemsHtml = (invoice.materials || []).map((it, i) => {
+    const name = it.name || (it.material && (it.material.name || it.material.materialName)) || "—";
+    const qty = it.quantity || 0;
+    const rate = Number(it.rate || 0).toFixed(2);
+    const amount = (qty * Number(it.rate || 0)).toFixed(2);
+    return `<tr><td style="padding:12px">${i+1}</td><td style="padding:12px">${name}</td><td style="padding:12px">${qty}</td><td style="padding:12px">₹${rate}</td><td style="padding:12px">₹${amount}</td></tr>`;
+  }).join("\n");
+
+  const subtotal = invoice.amount || (invoice.materials || []).reduce((s, it) => s + (Number(it.quantity||0) * Number(it.rate||0)), 0);
+  const gst = +(subtotal * 0.18).toFixed(2);
+  const total = +(subtotal + gst).toFixed(2);
+
+  // Compute CGST and SGST as halves of GST (common Indian split)
+  const cgst = +(gst / 2).toFixed(2);
+  const sgst = +(gst / 2).toFixed(2);
+
+  // Convert amount to words (Rupees and Paise)
+  const numberToWords = (function () {
+    const a = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+    const b = ['','', 'Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+    function inWords(num) {
+      if ((num = num.toString()).length > 9) return 'Amount too large';
+      const n = ('000000000' + num).substr(-9).match(/(\d{2})(\d{2})(\d{3})(\d{2})/);
+      if (!n) return; 
+      let str = '';
+      str += (n[1] != 0) ? (a[Number(n[1])] || (b[n[1][0]] + (n[1][1] != '0' ? ' ' + a[n[1][1]] : ''))) + ' Crore ' : '';
+      str += (n[2] != 0) ? (a[Number(n[2])] || (b[n[2][0]] + (n[2][1] != '0' ? ' ' + a[n[2][1]] : ''))) + ' Lakh ' : '';
+      str += (n[3] != 0) ? (function(num){
+        const hundreds = Math.floor(num/100);
+        const rem = num % 100;
+        let out = '';
+        if (hundreds) out += a[hundreds] + ' Hundred ';
+        if (rem) out += (rem < 20) ? a[rem] : (b[Math.floor(rem/10)] + (rem%10 ? ' ' + a[rem%10] : ''));
+        return out + ' '; })(Number(n[3])) : '';
+      str += (n[4] != 0) ? ((a[Number(n[4])] || (b[n[4][0]] + (n[4][1] != '0' ? ' ' + a[n[4][1]] : '')))) + ' ' : '';
+      return str.trim();
+    }
+    return function(amount){
+      const rupees = Math.floor(amount);
+      const paise = Math.round((amount - rupees) * 100);
+      let words = '';
+      if (rupees === 0) words = 'Zero Rupees';
+      else words = inWords(rupees) + ' Rupees';
+      if (paise > 0) words += ' and ' + inWords(paise) + ' Paise';
+      words += ' Only';
+      return words;
+    };
+  })();
+
+  const amountInWords = numberToWords(total);
+
+  const formattedDate = (invoice.date || invoice.createdAt) ? new Date(invoice.date || invoice.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: '2-digit', month: 'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: false }) : "";
+  const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30);
+  const formattedDue = dueDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: '2-digit', month: 'short', year:'numeric' });
+
+  tpl = tpl.replace(/{{invoiceNumber}}/g, invoice.invoiceNumber || "");
+  tpl = tpl.replace(/{{dateIssued}}/g, formattedDate);
+  tpl = tpl.replace(/{{dueDate}}/g, formattedDue);
+  tpl = tpl.replace(/{{clientName}}/g, clientName);
+  tpl = tpl.replace(/{{clientAddress}}/g, clientAddress.replace(/\n/g, ", "));
+  tpl = tpl.replace(/{{clientEmail}}/g, clientEmail || "");
+  tpl = tpl.replace(/{{clientPhone}}/g, clientPhone || "");
+  tpl = tpl.replace(/{{status}}/g, (invoice.status || "pending").toUpperCase());
+  tpl = tpl.replace(/{{amount}}/g, Number(total).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{items}}/g, itemsHtml);
+  tpl = tpl.replace(/{{subtotal}}/g, Number(subtotal).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{gst}}/g, Number(gst).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{total}}/g, Number(total).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{cgst}}/g, Number(cgst).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{sgst}}/g, Number(sgst).toLocaleString("en-IN", { minimumFractionDigits: 2 }));
+  tpl = tpl.replace(/{{amountInWords}}/g, amountInWords);
+
+  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent(tpl, { waitUntil: 'networkidle0' });
+  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
+  await browser.close();
+
+  return { pdfBuffer, invoice };
 };

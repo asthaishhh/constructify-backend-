@@ -6,6 +6,7 @@ import {
   getInvoices,
   updateInvoice,
   deleteInvoice,
+   generateInvoicePdf,
 } from "../controllers/invoice.controller.js";
 
 const router = express.Router();
@@ -32,6 +33,12 @@ router.post("/", authorizeRoles("admin", "user"), createInvoice);
    Admin + User
 --------------------------*/
 router.put("/:id", authorizeRoles("admin", "user"), updateInvoice);
+
+/* -------------------------
+   ✅ GET invoice PDF
+   Admin + User
+--------------------------*/
+router.get("/:id/pdf", authorizeRoles("admin", "user"), generateInvoicePdf);
 
 /* -------------------------
    ❌ DELETE invoice

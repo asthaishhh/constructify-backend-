@@ -2,6 +2,7 @@ import express from "express";
 import nodemailer from "nodemailer";
 import authenticateToken from "../middleware/auth.js";
 import authorizeRoles from "../middleware/authorize.js";
+import { generateInvoicePdfBuffer } from "../controllers/invoice.controller.js";
 
 const router = express.Router();
 const createTransporter = () => {
@@ -146,3 +147,66 @@ router.post(
 );
 
 export default router;
+
+// New route: POST /api/email/send-bill/invoice/:id
+router.post(
+  "/send-bill/invoice/:id",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
+    try {
+      const invoiceId = req.params.id;
+      const { to: overrideTo, subject } = req.body || {};
+
+      const { pdfBuffer, invoice } = await generateInvoicePdfBuffer(invoiceId);
+      if (!pdfBuffer || !invoice) return res.status(404).json({ message: "Invoice not found or PDF generation failed" });
+
+      const to = overrideTo || invoice.clientEmail || (invoice.customer && invoice.customer.email);
+      if (!to) return res.status(400).json({ message: "No recipient email found for this invoice" });
+
+      if (!/^\S+@\S+\.\S+$/.test(to)) {
+        return res.status(400).json({ message: "Invalid recipient email" });
+      }
+
+      const transporter = (() => {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+          throw new Error("EMAIL_USER / EMAIL_PASS not set in environment variables");
+        }
+        return nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+        });
+      })();
+
+      const safeClient = (invoice.client || (invoice.customer && invoice.customer.name) || "client").toString().slice(0, 40);
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: subject || `Invoice from Vrindavan Traders - ${invoice.invoiceNumber || invoice._id}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #0f4c5c;">Vrindavan Traders</h2>
+            <p>Dear ${invoice.client || (invoice.customer && invoice.customer.name) || 'Customer'},</p>
+            <p>Please find attached your invoice <strong>${invoice.invoiceNumber || ''}</strong>.</p>
+            <p>Thank you for your business!</p>
+            <p>Best regards,<br>Vrindavan Traders Team</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `invoice_${safeClient}_${invoice.invoiceNumber || invoice._id}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          },
+        ],
+      };
+
+      await transporter.sendMail(mailOptions);
+      res.json({ message: "Invoice generated and emailed successfully" });
+    } catch (error) {
+      console.error("send-bill/invoice error:", error);
+      res.status(500).json({ message: "Failed to generate/send invoice", error: error.message });
+    }
+  }
+);
