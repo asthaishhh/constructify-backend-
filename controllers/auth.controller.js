@@ -16,7 +16,7 @@ const generateToken = (user) => {
 
 export const signup = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -38,10 +38,13 @@ export const signup = async (req, res) => {
     }
 
     // your User model hashes password in pre('save')
+    const normalizedRole = role === "admin" ? "admin" : "user";
+
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       password,
+      role: normalizedRole,
     });
 
     const token = generateToken(user);
